@@ -32,6 +32,9 @@ clean:
 	-rm -f ./*.o ./*/*.o
 	-rm -f ./*.out
 
+static:
+	rm -rf static/ && mkdir static/ && cp -R ~/code/js/simple-static-site-generator/build/* ./static/
+
 $(DEPDIR)/%.d: ;
 .PRECIOUS: $(DEPDIR)/%.d
 

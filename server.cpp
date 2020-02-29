@@ -85,15 +85,23 @@ int main() {
         std::memset((void *)&ctx, 0, sizeof(ctx));
         std::memset((void *)&accept_ctx, 0, sizeof(accept_ctx));
 
-        /* host config */
         h2o_pathconf_t *path_conf;
+
+        /* host config */
         h2o_config_init(&config);
         h2o_iovec_t default_host = h2o_iovec_init(H2O_STRLIT("default"));
         h2o_hostconf_t *host_conf =
                 h2o_config_register_host(&config, default_host, 65535);
 
         /* routes */
-        path_conf = register_handler(host_conf, "/", hello_handler);
+        path_conf = register_handler(host_conf, "/sayhello", hello_handler);
+
+        /* server static assets */
+        path_conf = h2o_config_register_path(host_conf, "/", 0);
+        h2o_compress_args_t ca;
+        h2o_compress_register(path_conf, &ca);
+        h2o_file_register(path_conf, "static", NULL, NULL,
+                          H2O_FILE_FLAG_GUNZIP);
 
         /* event loop */
         h2o_context_init(&ctx, h2o_evloop_create(), &config);
