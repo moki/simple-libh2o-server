@@ -1,5 +1,6 @@
-simple web server in c++ using libh2o
+simple libh2o server
 --------------------------------------------------------------------------------
+simple server written in c++ using libh2o
 
 license
 --------------------------------------------------------------------------------
