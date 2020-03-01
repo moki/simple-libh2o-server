@@ -24,6 +24,45 @@ static void on_accept(h2o_socket_t *listener, const char *err) {
         h2o_accept(&accept_ctx, sock);
 }
 
+static int use_ssl(const char *cert_file, const char *key_file,
+                   const char *ciphers) {
+        SSL_load_error_strings();
+        SSL_library_init();
+        OpenSSL_add_all_algorithms();
+
+        accept_ctx.ssl_ctx = SSL_CTX_new(SSLv23_server_method());
+        SSL_CTX_set_options(accept_ctx.ssl_ctx, SSL_OP_NO_SSLv2);
+
+#ifdef SSL_CTX_set_ecdh_auto
+        std::cout << "log: SSL_CTX_set_ecdh_auto is set" << std::endl;
+        SSL_CTX_set_ecdh_auto(accept_ctx.ssl_ctx, 1);
+#endif
+
+        if (SSL_CTX_use_certificate_chain_file(accept_ctx.ssl_ctx, cert_file) !=
+            1) {
+                std::cerr << "an error occurred while trying to load server "
+                             "certificate file: "
+                          << cert_file << std::endl;
+                return -1;
+        }
+        if (SSL_CTX_use_PrivateKey_file(accept_ctx.ssl_ctx, key_file,
+                                        SSL_FILETYPE_PEM) != 1) {
+                std::cerr << "an error occurred while trying to load private "
+                             "key file: "
+                          << key_file << std::endl;
+                return -1;
+        }
+        if (SSL_CTX_set_cipher_list(accept_ctx.ssl_ctx, ciphers) != 1) {
+                std::cerr << "ciphers could not be set:" << ciphers
+                          << std::endl;
+                return -1;
+        }
+
+        h2o_ssl_register_alpn_protocols(accept_ctx.ssl_ctx,
+                                        h2o_http2_alpn_protocols);
+        return 0;
+}
+
 static int listener(void) {
         struct sockaddr_in addr;
         int fd, r = 1;
@@ -96,12 +135,19 @@ int main() {
         /* routes */
         path_conf = register_handler(host_conf, "/sayhello", hello_handler);
 
-        /* server static assets */
+        /* serve static assets */
         path_conf = h2o_config_register_path(host_conf, "/", 0);
         h2o_compress_args_t ca;
         h2o_compress_register(path_conf, &ca);
         h2o_file_register(path_conf, "static", NULL, NULL,
                           H2O_FILE_FLAG_GUNZIP);
+
+        /* ssl */
+        const char *ciphers =
+                "DEFAULT:!MD5:!DSS:!DES:!RC4:!RC2:!SEED:!IDEA:!NULL:!"
+                "ADH:!EXP:!SRP:!PSK";
+        if (use_ssl("server.crt", "server.key", ciphers) != 0)
+                goto errexit;
 
         /* event loop */
         h2o_context_init(&ctx, h2o_evloop_create(), &config);
@@ -109,16 +155,19 @@ int main() {
         accept_ctx.hosts = config.hosts;
 
         if (listener() != 0) {
-                std::cout << "failed to startup server at 127.0.0.1:3000"
-                          << std::endl;
+                std::cout
+                        << "failed to startup server at https://127.0.0.1:3000"
+                        << std::endl;
                 goto errexit;
         } else
-                std::cout << "server listens at 127.0.0.1:3000" << std::endl;
+                std::cout << "server listens at https://127.0.0.1:3000"
+                          << std::endl;
 
         for (; h2o_evloop_run(ctx.loop, INT32_MAX) == 0;)
                 ;
 
         return 0;
+
 errexit:
-        exit(1);
+        return 1;
 }

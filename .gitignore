@@ -33,3 +33,7 @@
 
 # Public path
 static/
+
+# Local
+*.crt
+*.key
